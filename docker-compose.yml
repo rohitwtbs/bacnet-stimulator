@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  bacnet-stimulator:
+    build: .
+    container_name: bacnet-stimulator
+    network_mode: "host"
+    environment:
+      - PYTHONUNBUFFERED=1
+    # Uncomment the following lines if you want to map a custom config or logs
+    # volumes:
+    #   - ./config:/app/config
+    #   - ./logs:/app/logs
+    # Set privileged if you need raw socket access (not always required)
+    # privileged: true
+    # Expose UDP port for BACnet (if not using host network)
+    # ports:
+    #   - "47808:47808/udp"
