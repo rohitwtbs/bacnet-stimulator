@@ -1,0 +1,15 @@
+{
+  "name": "bacnet-stimulator",
+  "version": "1.0.0",
+  "description": "A BACnet stimulator using Node.js and node-bacstack.",
+  "main": "bacnet-stimulator.js",
+  "scripts": {
+    "start": "node bacnet-stimulator.js"
+  },
+  "author": "rohitwtbs",
+  "license": "MIT",
+  "dependencies": {
+    "bacstack": "^0.0.1-beta.14",
+    "express": "^5.1.0"
+  }
+}
