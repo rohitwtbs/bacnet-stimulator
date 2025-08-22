@@ -16,6 +16,7 @@
   <table id="devices-table">
     <thead>
       <tr>
+        <th></th>
         <th>Device ID</th>
         <th>Address</th>
         <th>Port</th>
@@ -24,16 +25,53 @@
     <tbody></tbody>
   </table>
   <script>
-    async function fetchDevices() {
-      const res = await fetch('/api/devices');
-      const devices = await res.json();
+    let lastDevices = [];
+    let expanded = {};
+
+    function toggleExpand(deviceId) {
+      expanded[deviceId] = !expanded[deviceId];
+      renderDevices(lastDevices);
+    }
+
+    function renderDevices(devices) {
       const tbody = document.querySelector('#devices-table tbody');
       tbody.innerHTML = '';
       devices.forEach(dev => {
+        const isOpen = expanded[dev.deviceId];
         const row = document.createElement('tr');
-        row.innerHTML = `<td>${dev.deviceId}</td><td>${dev.address}</td><td>${dev.port}</td>`;
+        row.className = 'device-row';
+        row.style.cursor = 'pointer';
+        row.onclick = () => toggleExpand(dev.deviceId);
+        row.innerHTML = `
+          <td style="width:30px;text-align:center;">${dev.objects && dev.objects.length > 0 ? (isOpen ? '▼' : '►') : ''}</td>
+          <td>${dev.deviceId}</td>
+          <td>${dev.address}</td>
+          <td>${dev.port}</td>
+        `;
         tbody.appendChild(row);
+        // Add objects as a nested table if expanded
+        if (isOpen && dev.objects && dev.objects.length > 0) {
+          const objRow = document.createElement('tr');
+          const objCell = document.createElement('td');
+          objCell.colSpan = 4;
+          let objTable = '<table style="margin:10px 0 10px 40px;width:auto;background:#f9f9f9;">';
+          objTable += '<thead><tr><th>Type</th><th>Name</th><th>Present Value</th></tr></thead><tbody>';
+          dev.objects.forEach(obj => {
+            objTable += `<tr><td>${obj.type}</td><td>${obj.name}</td><td>${obj.presentValue}</td></tr>`;
+          });
+          objTable += '</tbody></table>';
+          objCell.innerHTML = objTable;
+          objRow.appendChild(objCell);
+          tbody.appendChild(objRow);
+        }
       });
+    }
+
+    async function fetchDevices() {
+      const res = await fetch('/api/devices');
+      const devices = await res.json();
+      lastDevices = devices;
+      renderDevices(devices);
     }
     fetchDevices();
     setInterval(fetchDevices, 3000); // Refresh every 3 seconds
