@@ -13,17 +13,28 @@
 </head>
 <body>
   <h1>Simulated BACnet Devices</h1>
-  <table id="devices-table">
-    <thead>
-      <tr>
-        <th></th>
-        <th>Device ID</th>
-        <th>Address</th>
-        <th>Port</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+  <div style="display:flex;gap:40px;align-items:flex-start;">
+    <div>
+      <h3>Floor Map</h3>
+      <div id="map-container" style="position:relative;width:600px;height:400px;border:1px solid #aaa;background:#eee;">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Simple_house_floorplan.svg/600px-Simple_house_floorplan.svg.png" alt="Floor Map" style="width:600px;height:400px;display:block;">
+        <div id="map-markers" style="position:absolute;top:0;left:0;width:600px;height:400px;"></div>
+      </div>
+    </div>
+    <div>
+      <table id="devices-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Device ID</th>
+            <th>Address</th>
+            <th>Port</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
   <script>
     let lastDevices = [];
     let expanded = {};
@@ -63,6 +74,36 @@
           objCell.innerHTML = objTable;
           objRow.appendChild(objCell);
           tbody.appendChild(objRow);
+        }
+      });
+
+      // Render device markers on the map
+      const markerLayer = document.getElementById('map-markers');
+      markerLayer.innerHTML = '';
+      devices.forEach(dev => {
+        if (typeof dev.x === 'number' && typeof dev.y === 'number') {
+          const marker = document.createElement('div');
+          marker.style.position = 'absolute';
+          marker.style.left = (dev.x - 10) + 'px';
+          marker.style.top = (dev.y - 10) + 'px';
+          marker.style.width = '20px';
+          marker.style.height = '20px';
+          marker.style.background = '#3498db';
+          marker.style.borderRadius = '50%';
+          marker.style.display = 'flex';
+          marker.style.alignItems = 'center';
+          marker.style.justifyContent = 'center';
+          marker.style.color = '#fff';
+          marker.style.fontWeight = 'bold';
+          marker.style.cursor = 'pointer';
+          marker.title = `Device ${dev.deviceId}`;
+          marker.innerText = dev.deviceId;
+          marker.onclick = (e) => {
+            e.stopPropagation();
+            expanded[dev.deviceId] = !expanded[dev.deviceId];
+            renderDevices(devices);
+          };
+          markerLayer.appendChild(marker);
         }
       });
     }

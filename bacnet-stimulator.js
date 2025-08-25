@@ -43,10 +43,15 @@ function createDevice(deviceId, address, port) {
       presentValue: (i + 1) % 2
     });
   }
+  // Assign random coordinates for demo (replace with real ones as needed)
+  const x = Math.floor(Math.random() * 500) + 50; // 50-550 px
+  const y = Math.floor(Math.random() * 300) + 50; // 50-350 px
   simulatedDevices.push({
     deviceId,
     address,
     port,
+    x,
+    y,
     objects
   });
   return client;
