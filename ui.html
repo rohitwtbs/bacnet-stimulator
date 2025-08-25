@@ -15,11 +15,8 @@
   <h1>Simulated BACnet Devices</h1>
   <div style="display:flex;gap:40px;align-items:flex-start;">
     <div>
-      <h3>Floor Map</h3>
-      <div id="map-container" style="position:relative;width:600px;height:400px;border:1px solid #aaa;background:#eee;">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Simple_house_floorplan.svg/600px-Simple_house_floorplan.svg.png" alt="Floor Map" style="width:600px;height:400px;display:block;">
-        <div id="map-markers" style="position:absolute;top:0;left:0;width:600px;height:400px;"></div>
-      </div>
+      <h3>3D Room (Three.js)</h3>
+      <div id="threejs-room" style="width:600px;height:400px;border:1px solid #aaa;background:#222;"></div>
     </div>
     <div>
       <table id="devices-table">
@@ -27,6 +24,7 @@
           <tr>
             <th></th>
             <th>Device ID</th>
+            <th>Type</th>
             <th>Address</th>
             <th>Port</th>
           </tr>
@@ -35,6 +33,9 @@
       </table>
     </div>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.140.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.140.2/examples/js/controls/OrbitControls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/stats.js@0.17.0/build/stats.min.js"></script>
   <script>
     let lastDevices = [];
     let expanded = {};
@@ -42,6 +43,176 @@
     function toggleExpand(deviceId) {
       expanded[deviceId] = !expanded[deviceId];
       renderDevices(lastDevices);
+    }
+
+    // --- Three.js 3D Room ---
+  let renderer, scene, camera, controls, raycaster, mouse, INTERSECTED;
+  let deviceMeshes = [];
+  let stats;
+  function initThreeRoom() {
+      const container = document.getElementById('threejs-room');
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(600, 400);
+      container.innerHTML = '';
+      container.appendChild(renderer.domElement);
+      // Add FPS meter
+      if (!stats) {
+        stats = new Stats();
+        stats.showPanel(0); // 0: fps
+        stats.dom.style.position = 'absolute';
+        stats.dom.style.left = '0px';
+        stats.dom.style.top = '0px';
+        container.appendChild(stats.dom);
+      }
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x222222);
+      camera = new THREE.PerspectiveCamera(60, 600/400, 1, 2000);
+      camera.position.set(0, 200, 600);
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.2; // Smoother
+  controls.zoomSpeed = 1.5; // Faster zoom
+  controls.minDistance = 100;
+  controls.maxDistance = 1200;
+  controls.enableRotate = false;
+  controls.enablePan = false;
+  controls.enableZoom = false; // We'll enable zoom only on hover
+  controls.target.set(250, 0, 150);
+  controls.update();
+
+  // Enable zoom only when mouse is over the 3D room
+  const canvasEl = renderer.domElement;
+  canvasEl.addEventListener('mouseenter', () => { controls.enableZoom = true; });
+  canvasEl.addEventListener('mouseleave', () => { controls.enableZoom = false; });
+      // Room (floor and walls)
+      const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(600, 400),
+        new THREE.MeshPhongMaterial({ color: 0x888888, side: THREE.DoubleSide })
+      );
+      floor.rotation.x = -Math.PI/2;
+      floor.position.y = -20;
+      scene.add(floor);
+      // Lighting
+      scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+      dirLight.position.set(0, 500, 500);
+      scene.add(dirLight);
+      // Raycaster for picking
+      raycaster = new THREE.Raycaster();
+      mouse = new THREE.Vector2();
+      // Tooltip
+      let tooltip = document.getElementById('threejs-tooltip');
+      if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'threejs-tooltip';
+        tooltip.style.position = 'absolute';
+        tooltip.style.pointerEvents = 'none';
+        tooltip.style.background = 'rgba(0,0,0,0.8)';
+        tooltip.style.color = '#fff';
+        tooltip.style.padding = '4px 8px';
+        tooltip.style.borderRadius = '4px';
+        tooltip.style.fontSize = '13px';
+        tooltip.style.display = 'none';
+        tooltip.style.zIndex = 10;
+        document.body.appendChild(tooltip);
+      }
+      renderer.domElement.addEventListener('mousemove', (event) => {
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(deviceMeshes);
+        if (intersects.length > 0) {
+          const mesh = intersects[0].object;
+          INTERSECTED = mesh;
+          tooltip.style.display = 'block';
+          tooltip.innerHTML = mesh.userData.label;
+          tooltip.style.left = (event.clientX + 10) + 'px';
+          tooltip.style.top = (event.clientY - 10) + 'px';
+        } else {
+          INTERSECTED = null;
+          tooltip.style.display = 'none';
+        }
+      });
+      renderer.domElement.addEventListener('click', (event) => {
+        if (INTERSECTED && INTERSECTED.userData.deviceId) {
+          expanded[INTERSECTED.userData.deviceId] = !expanded[INTERSECTED.userData.deviceId];
+          renderDevices(lastDevices);
+        }
+      });
+    }
+
+    function renderThreeRoom(devices) {
+      if (!renderer) initThreeRoom();
+      // Remove old device meshes
+      deviceMeshes.forEach(m => scene.remove(m));
+      deviceMeshes = [];
+      // Place devices as shapes
+      devices.forEach(dev => {
+        let mesh;
+        let color = 0x3498db;
+        // Choose shape by type
+        switch ((dev.type||'').toLowerCase()) {
+          case 'controller':
+            mesh = new THREE.Mesh(new THREE.BoxGeometry(30, 30, 30), new THREE.MeshPhongMaterial({ color: 0x3498db }));
+            break;
+          case 'router':
+            mesh = new THREE.Mesh(new THREE.CylinderGeometry(15, 15, 30, 32), new THREE.MeshPhongMaterial({ color: 0xe67e22 }));
+            break;
+          case 'gateway':
+            mesh = new THREE.Mesh(new THREE.TorusGeometry(18, 7, 16, 100), new THREE.MeshPhongMaterial({ color: 0x9b59b6 }));
+            break;
+          case 'workstation':
+            mesh = new THREE.Mesh(new THREE.SphereGeometry(18, 32, 32), new THREE.MeshPhongMaterial({ color: 0x2ecc71 }));
+            break;
+          case 'sensor':
+            mesh = new THREE.Mesh(new THREE.SphereGeometry(12, 24, 24), new THREE.MeshPhongMaterial({ color: 0x1abc9c }));
+            break;
+          case 'actuator':
+            mesh = new THREE.Mesh(new THREE.ConeGeometry(15, 30, 32), new THREE.MeshPhongMaterial({ color: 0xf1c40f }));
+            break;
+          case 'meter':
+            mesh = new THREE.Mesh(new THREE.OctahedronGeometry(16), new THREE.MeshPhongMaterial({ color: 0xe74c3c }));
+            break;
+          case 'application-specific':
+            mesh = new THREE.Mesh(new THREE.BoxGeometry(24, 24, 24), new THREE.MeshPhongMaterial({ color: 0x34495e }));
+            break;
+          case 'lighting-controller':
+            mesh = new THREE.Mesh(new THREE.TorusKnotGeometry(12, 4, 100, 16), new THREE.MeshPhongMaterial({ color: 0xf39c12 }));
+            break;
+          case 'fire-alarm-panel':
+            mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(16), new THREE.MeshPhongMaterial({ color: 0xc0392b }));
+            break;
+          case 'access-control':
+            mesh = new THREE.Mesh(new THREE.CylinderGeometry(10, 10, 24, 32), new THREE.MeshPhongMaterial({ color: 0x8e44ad }));
+            break;
+          case 'smart-sensor':
+            mesh = new THREE.Mesh(new THREE.SphereGeometry(10, 16, 16), new THREE.MeshPhongMaterial({ color: 0x16a085 }));
+            break;
+          case 'smart-actuator':
+            mesh = new THREE.Mesh(new THREE.ConeGeometry(10, 20, 16), new THREE.MeshPhongMaterial({ color: 0xf7ca18 }));
+            break;
+          default:
+            mesh = new THREE.Mesh(new THREE.BoxGeometry(20, 20, 20), new THREE.MeshPhongMaterial({ color: 0x95a5a6 }));
+        }
+        // Place in room
+        mesh.position.set(dev.x || 0, 0, dev.y || 0);
+        mesh.userData = {
+          deviceId: dev.deviceId,
+          label: `Device ${dev.deviceId} (${dev.type || ''})` + (dev.objects && dev.objects.length ? `<br>Objects: ${dev.objects.length}` : '')
+        };
+        deviceMeshes.push(mesh);
+        scene.add(mesh);
+      });
+      // Animate with FPS meter
+      function animate() {
+        requestAnimationFrame(animate);
+        if (stats) stats.begin();
+        renderer.render(scene, camera);
+        controls.update();
+        if (stats) stats.end();
+      }
+      animate();
     }
 
     function renderDevices(devices) {
@@ -56,6 +227,7 @@
         row.innerHTML = `
           <td style="width:30px;text-align:center;">${dev.objects && dev.objects.length > 0 ? (isOpen ? '▼' : '►') : ''}</td>
           <td>${dev.deviceId}</td>
+          <td>${dev.type || ''}</td>
           <td>${dev.address}</td>
           <td>${dev.port}</td>
         `;
@@ -64,7 +236,7 @@
         if (isOpen && dev.objects && dev.objects.length > 0) {
           const objRow = document.createElement('tr');
           const objCell = document.createElement('td');
-          objCell.colSpan = 4;
+          objCell.colSpan = 5;
           let objTable = '<table style="margin:10px 0 10px 40px;width:auto;background:#f9f9f9;">';
           objTable += '<thead><tr><th>Type</th><th>Name</th><th>Present Value</th></tr></thead><tbody>';
           dev.objects.forEach(obj => {
@@ -76,36 +248,6 @@
           tbody.appendChild(objRow);
         }
       });
-
-      // Render device markers on the map
-      const markerLayer = document.getElementById('map-markers');
-      markerLayer.innerHTML = '';
-      devices.forEach(dev => {
-        if (typeof dev.x === 'number' && typeof dev.y === 'number') {
-          const marker = document.createElement('div');
-          marker.style.position = 'absolute';
-          marker.style.left = (dev.x - 10) + 'px';
-          marker.style.top = (dev.y - 10) + 'px';
-          marker.style.width = '20px';
-          marker.style.height = '20px';
-          marker.style.background = '#3498db';
-          marker.style.borderRadius = '50%';
-          marker.style.display = 'flex';
-          marker.style.alignItems = 'center';
-          marker.style.justifyContent = 'center';
-          marker.style.color = '#fff';
-          marker.style.fontWeight = 'bold';
-          marker.style.cursor = 'pointer';
-          marker.title = `Device ${dev.deviceId}`;
-          marker.innerText = dev.deviceId;
-          marker.onclick = (e) => {
-            e.stopPropagation();
-            expanded[dev.deviceId] = !expanded[dev.deviceId];
-            renderDevices(devices);
-          };
-          markerLayer.appendChild(marker);
-        }
-      });
     }
 
     async function fetchDevices() {
@@ -113,6 +255,7 @@
       const devices = await res.json();
       lastDevices = devices;
       renderDevices(devices);
+      renderThreeRoom(devices);
     }
     fetchDevices();
     setInterval(fetchDevices, 3000); // Refresh every 3 seconds

@@ -19,29 +19,54 @@ function createDevice(deviceId, address, port) {
   client.deviceId = deviceId;
   client.address = address;
   client.port = port;
+
+  // Assign a type from a list of BACnet device types
+  const deviceTypes = [
+    'controller',
+    'router',
+    'gateway',
+    'workstation',
+    'sensor',
+    'actuator',
+    'meter',
+    'application-specific',
+    'lighting-controller',
+    'fire-alarm-panel',
+    'access-control',
+    'smart-sensor',
+    'smart-actuator'
+  ];
+  // Cycle through types for demo
+  const type = deviceTypes[deviceId % deviceTypes.length];
+
   // Simulate BACnet objects for UI (not real BACnet objects)
   const objects = [];
   for (let i = 0; i < OBJECTS_PER_TYPE; i++) {
-    objects.push({
-      type: 'analogInput',
-      name: `AI${i}`,
-      presentValue: 20.0 + i
-    });
-    objects.push({
-      type: 'analogOutput',
-      name: `AO${i}`,
-      presentValue: 10.0 + i
-    });
-    objects.push({
-      type: 'binaryInput',
-      name: `BI${i}`,
-      presentValue: i % 2
-    });
-    objects.push({
-      type: 'binaryOutput',
-      name: `BO${i}`,
-      presentValue: (i + 1) % 2
-    });
+    if (type === 'controller' || type === 'application-specific') {
+      objects.push({ type: 'analogInput', name: `AI${i}`, presentValue: 20.0 + i });
+      objects.push({ type: 'analogOutput', name: `AO${i}`, presentValue: 10.0 + i });
+      objects.push({ type: 'binaryInput', name: `BI${i}`, presentValue: i % 2 });
+      objects.push({ type: 'binaryOutput', name: `BO${i}`, presentValue: (i + 1) % 2 });
+    } else if (type === 'sensor' || type === 'smart-sensor') {
+      objects.push({ type: 'analogInput', name: `TempSensor${i}`, presentValue: 22.5 + i });
+      objects.push({ type: 'analogInput', name: `HumiditySensor${i}`, presentValue: 50 + i });
+    } else if (type === 'actuator' || type === 'smart-actuator') {
+      objects.push({ type: 'binaryOutput', name: `Valve${i}`, presentValue: i % 2 });
+      objects.push({ type: 'analogOutput', name: `Damper${i}`, presentValue: 5.0 + i });
+    } else if (type === 'meter') {
+      objects.push({ type: 'analogInput', name: `Energy${i}`, presentValue: 1000 + i * 100 });
+      objects.push({ type: 'analogInput', name: `Water${i}`, presentValue: 200 + i * 10 });
+    } else if (type === 'lighting-controller') {
+      objects.push({ type: 'binaryOutput', name: `Light${i}`, presentValue: i % 2 });
+    } else if (type === 'fire-alarm-panel') {
+      objects.push({ type: 'binaryInput', name: `Smoke${i}`, presentValue: i % 2 });
+      objects.push({ type: 'binaryInput', name: `Heat${i}`, presentValue: (i + 1) % 2 });
+    } else if (type === 'access-control') {
+      objects.push({ type: 'binaryInput', name: `Door${i}`, presentValue: i % 2 });
+      objects.push({ type: 'binaryOutput', name: `Lock${i}`, presentValue: (i + 1) % 2 });
+    } else if (type === 'router' || type === 'gateway' || type === 'workstation') {
+      objects.push({ type: 'device', name: `ConnectedDevice${i}`, presentValue: 1000 + i });
+    }
   }
   // Assign random coordinates for demo (replace with real ones as needed)
   const x = Math.floor(Math.random() * 500) + 50; // 50-550 px
@@ -50,6 +75,7 @@ function createDevice(deviceId, address, port) {
     deviceId,
     address,
     port,
+    type,
     x,
     y,
     objects
